@@ -12,7 +12,10 @@ const hrLinkSchema = z.object({
   companyName: z.string().trim().min(1).max(200),
   hrEmail: z.string().trim().toLowerCase().email().max(320),
   hrName: z.string().trim().min(1).max(200),
-  companyEmail: z.string().trim().transform(val => val === '' ? undefined : val).pipe(z.string().toLowerCase().email().max(320).optional()),
+  companyEmail: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().trim().toLowerCase().email().max(320).optional(),
+  ),
   driveTitle: z.string().trim().min(1).max(200),
 }).strict();
 
@@ -134,10 +137,6 @@ export const validateHrLink = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'Link has been revoked.' });
     }
 
-    if (invite.isUsed) {
-      return res.status(403).json({ success: false, message: 'Link has already been used.' });
-    }
-
     if (invite.expiresAt < new Date()) {
       return res.status(403).json({ success: false, message: 'Link has expired.' });
     }
@@ -147,9 +146,13 @@ export const validateHrLink = async (req: Request, res: Response) => {
       include: { company: true, selectionRounds: true }
     });
 
+    if (!drive) {
+      return res.status(404).json({ success: false, message: 'Placement drive not found.' });
+    }
+
     res.status(200).json({
       success: true,
-      data: { drive, hrEmail: invite.hrEmail }
+      data: { drive, hrEmail: invite.hrEmail, isUsed: invite.isUsed }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
